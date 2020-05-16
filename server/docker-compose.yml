@@ -1,0 +1,75 @@
+version: "2.4"
+
+services:
+  nomad-server:
+    build:
+      context: ./nomad
+    command: agent -dev
+    environment:
+      NOMAD_RUN_ROOT: 1
+      NOMAD_LOCAL_CONFIG: >
+        {
+          "server": {
+              "enabled": true,
+              "bootstrap_expect": 1
+          },
+          "client": {
+              "enabled": true
+          },
+          "consul": {
+            "address": "0.0.0.0:8500",
+            "server_service_name": "nomad1",
+            "client_service_name": "nomad-client1",
+            "auto_advertise": true,
+            "server_auto_join": true,
+            "client_auto_join": true,
+            "checks_use_advertise": true
+          },
+          "datacenter": "dc1",
+          "bind_addr": "192.168.0.172",
+          "log_level": "DEBUG",
+          "enable_debug": true,
+          "autopilot": {
+            "cleanup_dead_servers": true,
+            "last_contact_threshold": "1s",
+            "max_trailing_logs": 250,
+            "server_stabilization_time": "10s",
+            "enable_redundancy_zones": false,
+            "disable_upgrade_migration": false,
+            "enable_custom_upgrades": false,
+          },
+        }
+    cap_add:
+      - SYS_ADMIN
+    volumes:
+      - /opt/nomad:/opt/nomad
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp:/tmp
+    network_mode: "host"
+    privileged: true
+
+  consul-server:
+    image: consul:latest
+    command: "consul agent -data-dir=/consul/data -config-dir=/consul/config -server -ui -node=server1 -bootstrap-expect=1 -client=0.0.0.0 -advertise=192.168.0.172 -dns-port=53 -recursor=8.8.8.8"
+    environment:
+      CONSUL_ALLOW_PRIVILEGED_PORTS: "yes"
+      #CONSUL_LOCAL_CONFIG: >
+      #  {
+      #   "service": {
+      #     "name": "web",
+      #     "tags": [
+      #       "rails"
+      #     ],
+      #     "port": 80
+      #   }
+      # }
+    volumes:
+      - ./consul/config:/consul/config
+    network_mode: "host"
+
+  my-registry:
+    image: registry:latest
+    ports:
+      - "50000:5000"
+    restart: on-failure
+

@@ -1,0 +1,68 @@
+version: "2.4"
+
+services:
+  nomad-server:
+    build:
+      context: ./nomad
+    command: agent
+    environment:
+      NOMAD_RUN_ROOT: 1
+      NOMAD_LOCAL_CONFIG: >
+        {
+          "server": {
+            "enabled": true,
+            "server_join": {
+              "retry_join" : ["nomad1.service.dc1.consul"],
+              "retry_max": 3,
+              "retry_interval": "15s",
+            },
+          },
+          "client": {
+              "enabled": true,
+              "server_join": {
+                "retry_join": [ "nomad1.service.dc1.consul" ],
+                "retry_max": 3,
+                "retry_interval": "15s",
+              },
+          },
+          "consul": {
+            "server_service_name": "nomad2",
+            "client_service_name": "nomad-client2",
+            "address": "0.0.0.0:8500",
+            "auto_advertise": true,
+            "server_auto_join": true,
+            "client_auto_join": true,
+            "checks_use_advertise": true
+          },
+          "datacenter": "dc1",
+          "bind_addr": "192.168.0.173",
+          "log_level": "DEBUG",
+          "enable_debug": true
+        }
+    cap_add:
+      - SYS_ADMIN
+    volumes:
+      - /opt/nomad:/opt/nomad
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp:/tmp
+    network_mode: "host"
+    privileged: true
+    dns: 192.168.0.173
+    depends_on:
+      - consul-server
+
+  consul-server:
+    image: consul:latest
+    command: "consul agent -data-dir=/tmp/ -server -ui -node=server2 -client=0.0.0.0 -advertise=192.168.0.173 -join=192.168.0.172 -dns-port=53 -recursor=8.8.8.8"
+    network_mode: "host"
+    environment:
+     - "CONSUL_ALLOW_PRIVILEGED_PORTS=yes"
+    volumes:
+     - ./consul/config:/consul/config
+
+  my-registry:
+    image: registry:latest
+    ports:
+      - "50000:5000"
+    restart: on-failure
+
